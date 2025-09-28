@@ -10,7 +10,24 @@
   </style>
 </head>
 <body>
-  <h2>Simple Page Logger - v6</h2>
+  <h2>Simple Page Logger - v9</h2>
+  
+  <div style="margin-bottom: 15px;">
+    <label style="display: flex; align-items: center; margin-bottom: 10px;">
+      <input type="checkbox" id="enableToggle" style="margin-right: 8px;">
+      <span>Enable Data Capture</span>
+    </label>
+    
+    <label style="display: flex; align-items: center;">
+      <input type="radio" name="mode" value="instagram" checked style="margin-right: 8px;">
+      <span>Instagram Mode</span>
+    </label>
+    <label style="display: flex; align-items: center;">
+      <input type="radio" name="mode" value="tiktok" style="margin-right: 8px;">
+      <span>TikTok Mode</span>
+    </label>
+  </div>
+  
   <div id="status">Loading...</div>
   <div id="count">Pages: 0</div>
   <button class="btn" id="refreshBtn">Refresh</button>

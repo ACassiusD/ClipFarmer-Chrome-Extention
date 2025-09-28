@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
-  "name": "Simple Page Logger - v6",
-  "version": "6.0",
+  "name": "Simple Page Logger - v9",
+  "version": "9.0",
   "description": "Logs every page visit",
   "permissions": [
     "activeTab",

@@ -1,9 +1,14 @@
-// Instagram Reels Logger - v4
+// Instagram & TikTok Logger - v9
 console.log('Background script loaded');
 
 // Check if URL is Instagram reel
 function isInstagramReel(url) {
   return url.includes('/reels/') && url.includes('instagram.com');
+}
+
+// Check if URL is TikTok video
+function isTikTokVideo(url) {
+  return url.includes('tiktok.com') || url.includes('vt.tiktok.com');
 }
 
 // Extract post ID from URL
@@ -13,10 +18,55 @@ function extractPostId(url) {
 }
 
 // Generate unique ID
-function generateUniqueId(mediaId) {
+function generateUniqueId(mediaId, type) {
   const timestamp = Date.now();
   const randomSuffix = Math.random().toString(36).substring(2, 8).toUpperCase();
-  return `instagram-${mediaId}-${timestamp}-${randomSuffix}`;
+  return `${type}-${mediaId}-${timestamp}-${randomSuffix}`;
+}
+
+// Parse TikTok URL
+async function parseTikTokUrl(url) {
+  const fullTiktokRegex = /(?:https?:\/\/(?:www\.)?tiktok\.com\/@([^\/]+)\/video\/([^\/\?]+))/;
+  const shortTiktokRegex = /(?:https?:\/\/vt\.tiktok\.com\/([^\/\?]+))/;
+  
+  const fullMatch = url.match(fullTiktokRegex);
+  if (fullMatch) {
+    const username = fullMatch[1];
+    const postId = fullMatch[2];
+    return { postId, username };
+  }
+  
+  const shortMatch = url.match(shortTiktokRegex);
+  if (shortMatch) {
+    const shortId = shortMatch[1];
+    
+    // Try to resolve the short URL to get the full URL
+    try {
+      console.log('🔍 Resolving TikTok short URL:', url);
+      const response = await fetch(url, { 
+        method: 'HEAD',
+        redirect: 'follow'
+      });
+      const resolvedUrl = response.url;
+      console.log('🔍 Resolved URL:', resolvedUrl);
+      
+      // Parse the resolved URL
+      const resolvedMatch = resolvedUrl.match(fullTiktokRegex);
+      if (resolvedMatch) {
+        const username = resolvedMatch[1];
+        const postId = resolvedMatch[2];
+        console.log('🔍 Resolved to full URL:', { username, postId });
+        return { postId, username };
+      }
+    } catch (error) {
+      console.log('⚠️ Failed to resolve TikTok short URL:', error);
+    }
+    
+    // Fallback to short URL format
+    return { postId: shortId };
+  }
+  
+  return null;
 }
 
 // Fetch Instagram thumbnail
@@ -67,52 +117,144 @@ chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
   if (changeInfo.status === 'complete' && tab.url) {
     console.log('PAGE VISITED:', tab.url);
     
-    // Only process Instagram reels
-    if (isInstagramReel(tab.url)) {
-      console.log('INSTAGRAM REEL DETECTED:', tab.url);
+    // Check if extension is enabled
+    chrome.storage.local.get(['extensionEnabled', 'currentMode'], (settings) => {
+      const isEnabled = settings.extensionEnabled !== false; // Default to true
+      const mode = settings.currentMode || 'instagram';
       
-      // Save to storage (no duplicates)
-      chrome.storage.local.get(['visitedPages'], (result) => {
-        const pages = result.visitedPages || [];
+      if (!isEnabled) {
+        console.log('Extension disabled, skipping:', tab.url);
+        return;
+      }
+      
+      if (mode === 'instagram' && isInstagramReel(tab.url)) {
+        console.log('INSTAGRAM REEL DETECTED:', tab.url);
+        processInstagramReel(tab.url);
+      } else if (mode === 'tiktok' && isTikTokVideo(tab.url)) {
+        console.log('TIKTOK VIDEO DETECTED:', tab.url);
+        processTikTokVideo(tab.url);
+      } else {
+        console.log('Not a supported URL for current mode, skipping:', tab.url);
+      }
+    });
+  }
+});
+
+// Process Instagram reel
+function processInstagramReel(url) {
+  chrome.storage.local.get(['visitedPages'], (result) => {
+    const pages = result.visitedPages || [];
+    
+    // Check if URL already exists
+    const exists = pages.some(page => page.url === url);
+    
+    if (!exists) {
+      // Extract post ID
+      const postId = extractPostId(url);
+      console.log('🆔 Instagram Logger: Post ID:', postId);
+      
+      // Fetch thumbnail
+      fetchInstagramThumbnail(url).then(thumbnailUrl => {
+        const uniqueId = generateUniqueId(postId, 'instagram');
+        const createdAt = Date.now();
         
-        // Check if URL already exists
-        const exists = pages.some(page => page.url === tab.url);
+        const reelData = {
+          categories: [],
+          createdAt: createdAt,
+          id: uniqueId,
+          media_id: postId,
+          thumbnail_url: thumbnailUrl,
+          title: 'Instagram Reel',
+          type: 'instagram',
+          url: url
+        };
         
-        if (!exists) {
-          // Extract post ID
-          const postId = extractPostId(tab.url);
-          console.log('🆔 Instagram Logger: Post ID:', postId);
+        pages.push(reelData);
+        
+        chrome.storage.local.set({ visitedPages: pages }, () => {
+          console.log('✅ Instagram Logger: Saved unique reel with thumbnail:', reelData);
+        });
+      });
+    } else {
+      console.log('Instagram reel already exists, skipping:', url);
+    }
+  });
+}
+
+// Convert full TikTok URL to mobile format (closer to short URL)
+function convertToMobileUrl(fullUrl) {
+  try {
+    // Convert www.tiktok.com to m.tiktok.com
+    const mobileUrl = fullUrl.replace('www.tiktok.com', 'm.tiktok.com');
+    console.log('📱 Converted to mobile URL:', mobileUrl);
+    return mobileUrl;
+  } catch (error) {
+    console.log('⚠️ Could not convert to mobile URL:', error);
+    return fullUrl;
+  }
+}
+
+// Process TikTok video
+async function processTikTokVideo(url) {
+  chrome.storage.local.get(['visitedPages'], (result) => {
+    const pages = result.visitedPages || [];
+    
+    // Check if URL already exists
+    const exists = pages.some(page => page.url === url);
+    
+    if (!exists) {
+      parseTikTokUrl(url).then(tiktokData => {
+        if (tiktokData) {
+          const uniqueId = generateUniqueId(tiktokData.postId, 'tiktok');
+          const createdAt = Date.now();
           
-          // Fetch thumbnail
-          fetchInstagramThumbnail(tab.url).then(thumbnailUrl => {
-            const uniqueId = generateUniqueId(postId);
-            const createdAt = Date.now();
+          const videoData = {
+            categories: [],
+            createdAt: createdAt,
+            id: uniqueId,
+            media_id: tiktokData.postId,
+            title: 'TikTok Video',
+            type: 'tiktok',
+            url: url,
+            username: tiktokData.username
+          };
+          
+          pages.push(videoData);
+          
+          chrome.storage.local.set({ visitedPages: pages }, () => {
+            console.log('✅ TikTok Logger: Saved unique video:', videoData);
             
-            const reelData = {
-              categories: [],
-              createdAt: createdAt,
-              id: uniqueId,
-              media_id: postId,
-              thumbnail_url: thumbnailUrl,
-              title: 'Instagram Reel',
-              type: 'instagram',
-              url: tab.url
-            };
-            
-            pages.push(reelData);
-            
-            chrome.storage.local.set({ visitedPages: pages }, () => {
-              console.log('✅ Instagram Logger: Saved unique reel with thumbnail:', reelData);
-            });
+            // Convert to mobile URL if it's a full URL
+            if (url.includes('www.tiktok.com')) {
+              const mobileUrl = convertToMobileUrl(url);
+              if (mobileUrl !== url) {
+                console.log('📱 Converting to mobile URL:', mobileUrl);
+                
+                // Update the stored data with the mobile URL
+                const updatedVideoData = {
+                  ...videoData,
+                  url: mobileUrl
+                };
+                
+                // Update the stored data
+                const updatedPages = pages.map(page => 
+                  page.id === videoData.id ? updatedVideoData : page
+                );
+                
+                chrome.storage.local.set({ visitedPages: updatedPages }, () => {
+                  console.log('✅ Updated with mobile URL:', updatedVideoData);
+                });
+              }
+            }
           });
         } else {
-          console.log('Reel already exists, skipping:', tab.url);
+          console.log('❌ TikTok Logger: Could not parse TikTok URL:', url);
         }
       });
     } else {
-      console.log('Not an Instagram reel, skipping:', tab.url);
+      console.log('TikTok video already exists, skipping:', url);
     }
-  }
-});
+  });
+}
 
 console.log('Background script ready');
