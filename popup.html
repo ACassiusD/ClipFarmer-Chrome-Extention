@@ -1,0 +1,22 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <style>
+    body { width: 300px; padding: 20px; font-family: Arial, sans-serif; }
+    .btn { padding: 10px; margin: 5px; background: #4a90e2; color: white; border: none; border-radius: 5px; cursor: pointer; }
+    .btn:hover { background: #357abd; }
+    .page-item { background: #f0f0f0; padding: 10px; margin: 5px 0; border-radius: 5px; font-size: 12px; }
+  </style>
+</head>
+<body>
+  <h2>Simple Page Logger - v6</h2>
+  <div id="status">Loading...</div>
+  <div id="count">Pages: 0</div>
+  <button class="btn" id="refreshBtn">Refresh</button>
+  <button class="btn" id="exportBtn">Export JSON</button>
+  <button class="btn" id="clearBtn">Clear All</button>
+  <div id="pagesList"></div>
+  <script src="popup.js"></script>
+</body>
+</html>
